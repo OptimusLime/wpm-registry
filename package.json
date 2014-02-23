@@ -1,0 +1,17 @@
+{
+  "name": "wpm-registry",
+  "version": "0.0.1",
+  "description" : "WIN Package Manager registry. Handles user authentication, publish, and retrieve logic for all WIN libraries.",
+  "keywords": ["wpm", "registry", "wpm-registry", "NeuroEvolution", "evolution", "NEAT"],
+  "author": "Paul Szerlip <pszerlip@cs.ucf.edu>",
+  "main": "server.js",
+  "dependencies" : {
+    "express" : "~3.4.4", 		
+    "mongoose" : "~3.8.1", 			
+    "passport" : "~0.1.17", 		
+    "passport-local" : "~0.1.6",
+    "passport-http" : "*",
+    "connect-flash" : "~0.1.1", 	
+    "bcrypt-nodejs" : "latest" 		
+  }
+}
