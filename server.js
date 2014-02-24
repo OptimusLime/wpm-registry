@@ -23,7 +23,8 @@ app.configure(function() {
 	// set up our express application
 	app.use(express.logger('dev')); // log every request to the console
 	app.use(express.cookieParser()); // read cookies (needed for auth)
-	app.use(express.bodyParser()); // get information from html forms
+	//body parsing only happens for certain routes, not across the app
+	// app.use(express.bodyParser()); // get information from html forms
 
 	app.set('view engine', 'ejs'); // set up ejs for templating
 
@@ -37,7 +38,16 @@ app.configure(function() {
 
 // routes ======================================================================
 var accountRoutes = require('./app/routes/account.js')(passport); // load our routes and pass in our app and fully configured express standalone
+var publishRoutes = require('./app/routes/publish.js')(passport); // load our routes and pass in our app and fully configured express standalone
+
+//middleware to handle account login/creation
 app.use(accountRoutes);
+
+//middleware to handle publishing logic for packages
+app.use(publishRoutes);
+
+
+
 
 // launch ======================================================================
 app.listen(port);

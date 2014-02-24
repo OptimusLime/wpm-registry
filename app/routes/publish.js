@@ -1,35 +1,54 @@
 var express = require('express'); 
 var User = require('../models/user.js')
+var organizer = require('../utils/organizer.js');
+var qUtils = require('../utils/qUtils.js');
 
 module.exports = function(passport) {
 
-	//we create an express app that simply handles the account creation side of the registry
-	//it will be paired with other routes in other apps
-	//this way, all sections of the app can remain separate testable express apps
+	//we create an express app to handle publishing logic
 	var app = express();
 
 	//make sure body objects are parsed
 	//app.use(express.bodyParser());
 
 	// =============================================================================
-	// Check Username and E-mail ===================================================
+	// Initiate Desire to Upload Package ===========================================
 	// =============================================================================
 
-	app.get('/username/:username', function(req, res)
+	app.post('/packages/:username/:moduleName', passport.authenticate('login', {
+		session : 'false',
+		//failureRedirect : '/signup', // redirect back to the signup page if there is an error
+		failureFlash : true // allow flash messages
+	}), express.bodyParser(), function(req, res)
 	{
-		//count how many users with that id
-		var username = req.params.username;
+		//we need to know if we're allowed to publish this object in the first place
 
-		//do a user count on individuals with that name
-		//return whether or not it exists
-		User.count({username:username}, function(err, count)
-		{
-			var usernameExists = count > 0;
-			res.json({exists: usernameExists});
-		});
+		var packageInfo = req.body.properties;
+
+		var postedUser = {username: req.params.username, module: req.params.moduleName};
+		var packFileName = req.body.fileName;
+		var checksum = req.body.checksum;
+		var commandOptions = req.body.options;
+
+		organizer.approveModuleUpload(req.user, postedUser, packageInfo, commandOptions)
+			.then(function()
+			{
+				//we wouldn't be here if it wasn't approved (we would have been rejected with an error)
+
+				//now we need to figure out what to tell wpm for uploading the project
+				return organizer.prepareModuleUpload(req.user, packageInfo, checksum);
+			})
+			.done(function(uploadParams)
+			{	
+				res.json({success: true, parameters: uploadParams});
+			}, 
+			function(err)
+			{
+				res.json({success: false, error: err});
+			});		
 	});
 
-	app.get('/email/:email', function(req, res)
+	app.post('/email/:email', function(req, res)
 	{
 		//count how many users with that id
 		var email = req.params.email;
@@ -60,7 +79,7 @@ module.exports = function(passport) {
 
 
 	// process the signup form
-	app.post('/signup', express.bodyParser(), passport.authenticate('signup', {
+	app.post('/signup', passport.authenticate('signup', {
 		session : 'false',
 		failureFlash : true // allow flash messages
 	}), function(req, res)

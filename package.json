@@ -12,6 +12,11 @@
     "passport-local" : "~0.1.6",
     "passport-http" : "*",
     "connect-flash" : "~0.1.1", 	
-    "bcrypt-nodejs" : "latest" 		
+    "bcrypt-nodejs" : "latest",
+    "fs-extra" : "*",   
+    "semver" : "*",  
+    "fstream" : "*",
+    "cuid" : "*",  
+    "q" : "*" 		
   }
 }
