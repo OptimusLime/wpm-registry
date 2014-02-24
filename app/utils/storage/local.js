@@ -14,16 +14,26 @@ function localStorage()
 	var self = this;
 
 	self.inProgressUploads = {};
+	var uploadRouteBase = "/upload";
+	self.expressApproveRoute = function()
+	{
+		return '/packages/:username/:moduleName';
+	}
+	
+	self.expressUploadRoute = function()
+	{
+		return uploadRouteBase + '/:username/:uploadCUID';
+	}
 
 	self.moduleFolder = function(user, packageInfo)
 	{
-		return user.name + "/" + packageInfo.name;
+		return user.username + "/" + packageInfo.name;
 	}
 
 	self.moduleFilePath = function(user, packageInfo)
 	{
 		//tarred file location
- 		return self.moduleFolder + "/" + semver.clean(packageInfo.version) + ".tar.gz";
+ 		return self.moduleFolder(user, packageInfo) + "/" + semver.clean(packageInfo.version) + ".tar.gz";
 	}
 
 	self.prepareModuleUpload = function(user, packageInfo)
@@ -43,7 +53,7 @@ function localStorage()
 
 		var uploadCUID = cuid();
 
-		var uploadURL = "/upload/" + user.username + "/" + uploadCUID;
+		var uploadURL = uploadRouteBase + "/" + user.username + "/" + uploadCUID;
 		console.log('valid url: ' + uploadURL);
 
 		self.inProgressUploads[uploadCUID] = {
@@ -53,7 +63,7 @@ function localStorage()
 			fileName: moduleFile, directory: moduleDir, 
 			user : user.username,
 			name: packageInfo.name, 
-			version: semver(packageInfo.version)
+			version: semver.clean(packageInfo.version)
 		};
 
 		success(self.inProgressUploads[uploadCUID]);

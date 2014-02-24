@@ -2,6 +2,8 @@ var express = require('express');
 var User = require('../models/user.js')
 var organizer = require('../utils/organizer.js');
 var qUtils = require('../utils/qUtils.js');
+var fs = require('fs-extra');
+var path = require('path');
 
 module.exports = function(passport) {
 
@@ -11,11 +13,26 @@ module.exports = function(passport) {
 	//make sure body objects are parsed
 	//app.use(express.bodyParser());
 
+
+	//let's load in the configuration file synchronously
+
+	var storageJSON = fstream.readJSONSync('../../config/storage.json');
+
+	var cacheManager = require(path.resolve("../../", "./" + storageJSON.cache.requireLocation))(app);
+	var cacheCompatibility = storageJSON.cache.compatiblity;
+
+	var storageManager = require(path.resolve("../../", "./" + storageJSON.storage.requireLocation))(app);
+	var storageCompatibility = storageJSON.storage.compatiblity;
+
+	//we now have a storage manager and cache manager
+	//we set up some routes
+
 	// =============================================================================
 	// Initiate Desire to Upload Package ===========================================
 	// =============================================================================
 
-	app.post('/packages/:username/:moduleName', passport.authenticate('login', {
+	//storage manager knows where we're sending the files!
+	app.post(storageManager.expressApproveRoute(), passport.authenticate('login', {
 		session : 'false',
 		//failureRedirect : '/signup', // redirect back to the signup page if there is an error
 		failureFlash : true // allow flash messages
@@ -48,20 +65,25 @@ module.exports = function(passport) {
 			});		
 	});
 
-	app.post('/email/:email', function(req, res)
+	app.post(storageManager.expressUploadRoute(), passport.authenticate('login', {
+		session : 'false',
+		//failureRedirect : '/signup', // redirect back to the signup page if there is an error
+		failureFlash : true // allow flash messages
+	}), function(req, res)
 	{
-		//count how many users with that id
-		var email = req.params.email;
+		//we need to tell the organizer than a potential upload has been sent in
 
-		//do a user count on individuals with that name
-		//return whether or not it exists
-		User.count({email:email}, function(err, count)
-		{
-			var emailExists = count > 0;
-			res.json({exists: emailExists, email: email});
-		});
+		//send it all parameters parsed from the request
+		organizer.completePackageUpload(req.user, req.params)
+			.done(function()
+			{	
+				res.json({success: true);
+			}, 
+			function(err)
+			{
+				res.json({success: false, error: err});
+			});	
 	});
-
 	// =============================================================================
 	// AUTHENTICATE (FIRST LOGIN) ==================================================
 	// =============================================================================
