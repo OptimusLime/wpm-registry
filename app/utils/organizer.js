@@ -18,7 +18,10 @@ var publishErrors =
 	WrongUser : {code: 2000, message: "Module URL doesn't match authenticated user."},
 	SameVersion : {code: 3000, message: "Version published is identical to latest. Increment to publish or use -f."},
 	PriorVersion : {code: 4000, message: "Version being published is earlier than latest version."},
-	UnknownVersion : {code: 5000, message: "Unexpected code hit. Version number is confusing the registry."}
+	UnknownVersion : {code: 5000, message: "Unexpected code hit. Version number is confusing the registry."},
+	UnapprovedUpload : {code: 6000, message: "Error with the desired upload. Rejected for being unapproved."},
+	UnknownUpload : {code: 7000, message: "Unknown upload error."},
+
 
 };
 
@@ -100,6 +103,57 @@ organizer.prepareModuleUpload = function(currentUser, packageInfo, checksum)
 			success(uploadParams);
 		},function(err)
 		{
+			reject(err);
+		});
+
+	return defer.promise;
+}
+
+
+organizer.completePackageUpload = function(req, user, params)
+{
+
+	var defer = Q.defer();
+
+	var reject = function() { defer.reject.apply(defer, arguments); };
+	var success = function() { defer.resolve.apply(defer, arguments); };
+
+	//for skipping later events and sending a rejection at the end
+	//q doesn't have a good way to do this, it would seem
+	//maybe I should just throw the error?
+	var rejectError;
+
+
+	//pipe the package to the appropriate place
+	storageManager.approveModuleUpload(req, user, params)
+		.then(function(approval) {
+
+			console.log('Finisehd with checking approval: ', approval);
+
+			if (approval.approved) {
+				console.log('Looking to complete upload');
+				//it's been approved, let's do the upload dance
+				return storageManager.completePackageUpload(req, user, params);
+			} else {
+				//oops, rejected! Perhaps foul play is suspected
+				//mwahahahahaha
+				rejectError = publishErrors.UnapprovedUpload;
+				return;
+			}
+		})
+		.done(function(uploadCompleted) {
+			
+			//we were rejected in a previous step
+			if(rejectError)
+				reject(rejectError);
+			//a success! all uploaded :)
+			else if(uploadCompleted.success)
+				success(uploadCompleted);
+			//didn't succeed in upload, but didn't  get rejected, woops
+			else
+				reject(publishErrors.UnknownUpload);
+
+		}, function(err) {
 			reject(err);
 		});
 

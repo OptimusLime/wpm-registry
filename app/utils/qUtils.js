@@ -61,7 +61,8 @@ qGlobal.qExists = function(pathLocation)
 	return defer.promise;
 }
 
-qGlobal.qMD5Checksum = function(fileLocation)
+
+qGlobal.qMD5ChecksumStream = function(stream)
 {
 	var defer = Q.defer();
 	var reject = function() { defer.reject.apply(defer, arguments); };
@@ -70,24 +71,31 @@ qGlobal.qMD5Checksum = function(fileLocation)
 	
 	var shasum = crypto.createHash('md5');
 
-	//pull in our designated fileLocation (probably newly created tarball)
-	var s = fs.ReadStream(fileLocation);
-
 	//update on data for the checksum
-	s.on('data', function(d) {
+	stream.on('data', function(d) {
 	  shasum.update(d);
 	});
 
 	//when we're all done, create our checksum hex, and send along
-	s.on('end', function() {
+	stream.on('end', function() {
   		var d = shasum.digest('hex');
  		success(d);
 	});
 
 	//make sure to catch any errors
-	s.on("error", reject);
+	stream.on("error", reject);
+
 
 	return defer.promise;
+}
+
+qGlobal.qMD5Checksum = function(fileLocation)
+{
+	//pull in our designated fileLocation (probably newly created tarball)
+	var s = fs.ReadStream(fileLocation);
+
+	//send the stream for checksumming, it'll let us know when it's done
+	return qGlobal.qMD5ChecksumStream(s);	
 }
 
 

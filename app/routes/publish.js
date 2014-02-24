@@ -12,16 +12,16 @@ module.exports = function(passport) {
 
 	//make sure body objects are parsed
 	//app.use(express.bodyParser());
+	console.log("Path: ", path.resolve('./'));
 
 
 	//let's load in the configuration file synchronously
+	var storageJSON = fs.readJSONSync(path.resolve(__dirname, '../../config/storage.json'));
 
-	var storageJSON = fstream.readJSONSync('../../config/storage.json');
-
-	var cacheManager = require(path.resolve("../../", "./" + storageJSON.cache.requireLocation))(app);
+	var cacheManager = require(path.resolve(__dirname, "../../", "./" + storageJSON.cache.requireLocation))(app);
 	var cacheCompatibility = storageJSON.cache.compatiblity;
 
-	var storageManager = require(path.resolve("../../", "./" + storageJSON.storage.requireLocation))(app);
+	var storageManager = require(path.resolve(__dirname, "../../", "./" + storageJSON.storage.requireLocation))(app);
 	var storageCompatibility = storageJSON.storage.compatiblity;
 
 	//we now have a storage manager and cache manager
@@ -74,10 +74,10 @@ module.exports = function(passport) {
 		//we need to tell the organizer than a potential upload has been sent in
 
 		//send it all parameters parsed from the request
-		organizer.completePackageUpload(req.user, req.params)
+		organizer.completePackageUpload(req, req.user, req.params)
 			.done(function()
 			{	
-				res.json({success: true);
+				res.json({success: true});
 			}, 
 			function(err)
 			{
@@ -88,29 +88,29 @@ module.exports = function(passport) {
 	// AUTHENTICATE (FIRST LOGIN) ==================================================
 	// =============================================================================
 
-	app.post('/login', passport.authenticate('login', {
-		session : 'false',
-		//failureRedirect : '/signup', // redirect back to the signup page if there is an error
-		failureFlash : true // allow flash messages
-	}), function(req, res)
-	{
-		console.log('login finished, authentication successful');
-		var authenticated =  req.isAuthenticated();
-		res.json({success: authenticated});
-	});
+	// app.post('/login', passport.authenticate('login', {
+	// 	session : 'false',
+	// 	//failureRedirect : '/signup', // redirect back to the signup page if there is an error
+	// 	failureFlash : true // allow flash messages
+	// }), function(req, res)
+	// {
+	// 	console.log('login finished, authentication successful');
+	// 	var authenticated =  req.isAuthenticated();
+	// 	res.json({success: authenticated});
+	// });
 
 
-	// process the signup form
-	app.post('/signup', passport.authenticate('signup', {
-		session : 'false',
-		failureFlash : true // allow flash messages
-	}), function(req, res)
-	{
-		console.log('Signup body info after the fact: ');
-		console.log(req.body);
-		var authenticated =  req.isAuthenticated();
-		res.json({success: authenticated});
-	});
+	// // process the signup form
+	// app.post('/signup', passport.authenticate('signup', {
+	// 	session : 'false',
+	// 	failureFlash : true // allow flash messages
+	// }), function(req, res)
+	// {
+	// 	console.log('Signup body info after the fact: ');
+	// 	console.log(req.body);
+	// 	var authenticated =  req.isAuthenticated();
+	// 	res.json({success: authenticated});
+	// });
 
 	//pass back our express application routes
 	return app;

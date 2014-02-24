@@ -1,0 +1,10 @@
+{
+	"cache": {
+		"requireLocation": "app/utils/cache/inmemory.js",
+		"compatibility": "0.0.1"
+	},
+	"storage": {
+		"requireLocation": "app/utils/storage/local.js",
+		"compatibility": "0.0.1"
+	}
+}
