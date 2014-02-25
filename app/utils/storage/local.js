@@ -3,6 +3,7 @@ var path = require('path');
 var semver = require('semver');
 var cuid = require('cuid');
 var fstream = require('fstream');
+var fs = require('fs-extra');
 
 var qUtils = require("../qUtils.js");
 
@@ -11,21 +12,45 @@ module.exports = localStorage;
 //one hour is valid
 var validTime = 60*60000;
 
-function localStorage()
+function localStorage(cacheManager)
 {
 	var self = this;
 
+	//storage needs to know about the cache manager for storing/retrieving package info
+	//does't need to know the cache type, only certain functions
+	self.cacheManager = cacheManager;
+
 	self.inProgressUploads = {};
+
 	var uploadRouteBase = "/upload";
+	var confirmRouteBase = "/confirm";
+	var packageBase = '/packages/:username/:moduleName';
+
+	var packageSaveLocation = path.resolve(__dirname, "../../../packages/");
+
+
+	//where should we got to download a package
+	self.expressGetPackageRoute = function()
+	{
+		return packageBase + "/:fileName";
+	}
+
+	//approve is roughly the same place as get (just get vs post)
 	self.expressApproveRoute = function()
 	{
-		return '/packages/:username/:moduleName';
+		return packageBase;
 	}
 
 	self.expressUploadRoute = function()
 	{
 		return uploadRouteBase + '/:username/:uploadCUID';
 	}
+
+	self.expressConfirmRoute = function()
+	{
+		return confirmRouteBase + '/:username/:uploadCUID';
+	}
+
 
 	self.moduleFolder = function(user, packageInfo)
 	{
@@ -73,8 +98,10 @@ function localStorage()
 			user : user.username,
 			name: packageInfo.name, 
 			version: semver.clean(packageInfo.version),
+			properites : packageInfo,
 			checksum : checksum
 		};
+		// console.log("Perpare: ", self.inProgressUploads[uploadCUID]);
 
 		success(self.inProgressUploads[uploadCUID]);
 
@@ -105,7 +132,7 @@ function localStorage()
 
 		//make sure the user matches the logged in user, that the filename is matched
 		//and that the current time is within the valid time
-		if(currentUploads.user = user.username && validTime - Date.now() > 0)
+		if(currentUploads.user == user.username && validTime - Date.now() > 0)
 		{
 			success({approved: true});
 		}
@@ -144,42 +171,24 @@ function localStorage()
 			return;
 		}
 
-		console.log("Write to: ", path.resolve(__dirname, "../../../packages/", "./" + currentUploads.fileName));
+		console.log("Write to: ", path.resolve(packageSaveLocation, "./" + currentUploads.fileName));
 
-		var uploadPath = path.resolve(__dirname, "../../../packages/", "./" + currentUploads.fileName);
+		var uploadPath = path.resolve(packageSaveLocation, "./" + currentUploads.fileName);
 		var writer = fstream.Writer({
 			path: uploadPath
 		});
 
 
-		var checkWriteFinished = function()
-		{
-			if(writerFinished)
-			{
-				console.log('Official close check: ');
-				console.log(fileChecksum);
-				console.log("Previously promised xsum: ", promisedChecksum);
+		//we will almost be done
+		//after the upload is successfully completed, the client then sends a confirm request to verify the new upload
 
-				//now we verify with a checksum that was provided
-				if(fileChecksum == promisedChecksum)
-					success({success: true});
-				else
-					reject({success: false, error: "Checksums do not match."});
-			}
-			else
-				writerFinished = true;	
+		//we do this because in the event that the storage is being done outside the server (e.g. S3), we won't
+		//know when the package has been confirmed uploaded without some crazy logic
 
-		}
+		//instead the client will inform us it's done, and we'll check their work
+		var confirmURL = confirmRouteBase + "/" + user.username + "/" + uploadCUID;
 
-		//we'll pipe the write stream into the checksum, verifying the value at the end
-		// qUtils.qMD5ChecksumStream(writer)
-		// 	.done(function(check)
-		// 	{
-		// 		console.log('Finished md5 steam sum: ', check);
-		// 		fileChecksum = check;
-		// 		checkWriteFinished();
-		// 	}, reject);
-
+		console.log('valid url: ' + confirmURL);
 
 		//when it's closed, we're finished here
 		writer.on("close",function()
@@ -191,8 +200,12 @@ function localStorage()
 					console.log('Official close check: ');
 					console.log(sum);
 					console.log("Previously promised xsum: ", promisedChecksum);
-					if(sum == promisedChecksum)
-						success({success: true});
+					if(sum == promisedChecksum){
+
+						//before we return true, we update our cache with confirmation
+						currentUploads.validUpload = true;
+						success({success: true, parameters: {confirmURL: confirmURL}});
+					}
 					else
 						reject({success: false, error: "Checksums do not match."});
 				},  //if error we reject immediately
@@ -209,6 +222,115 @@ function localStorage()
 
 		return defer.promise;
 	}
+
+
+	var createPackage = function(userName, packageName, packagePropertiesJSON, storageProperties)
+	{
+		var latestVersion = semver.clean(packagePropertiesJSON.version);
+
+		return {
+			name: packageName,
+			packageOwner : userName,
+			properites : packagePropertiesJSON,
+			version : latestVersion,
+			location : 
+			{
+				url: storageProperties.url,
+				md5Checksum : storageProperties.md5Checksum
+			},
+			versions : [latestVersion]
+		};
+	}
+
+	var mergePackageHistory = function(oldPackageInfo, newPackageInfo)
+	{
+		newPackageInfo.versions = oldPackageInfo.versions.slice();
+		newPackageInfo.versions.push(newPackageInfo.latest);
+
+		return;
+	}
+
+	//confirm that the package was uploaded properly (useful for when the upload wasn't done to this server)
+	//will update the cache with the new version information
+	self.confirmPackageUpload = function(req, user, params)
+	{
+		var defer = Q.defer();
+		var reject = function() {
+			defer.reject.apply(defer, arguments);
+		};
+		var success = function() {
+			defer.resolve.apply(defer, arguments);
+		};
+
+		//check that our cache knows of the upload
+		var uploadCUID = params.uploadCUID;
+		if(!uploadCUID)
+		{
+			reject({success: false, error: "No upload CUID provided."});
+			return;
+		}
+
+		var currentUploads = self.inProgressUploads[uploadCUID];
+		if(!currentUploads)
+		{
+			reject({success: false, error: "CUID doesn't match any known upload requests."});
+			return;
+		}
+
+		//check the cache for whether or not the upload is valid
+		//in this case, it's a simply memory lookup, but it'll be more complicated in the future
+		if (currentUploads.validUpload) {
+
+			//lets create our cache object
+			//check previous object exists
+			cacheManager.getPackageCache(currentUploads.user, currentUploads.name)
+				.done(function(oldPackage) {
+
+					console.log("Confirmed upload: ",currentUploads);
+					//we're going to make a new cache item
+					var newPackage = createPackage(
+						currentUploads.user,
+						currentUploads.name,
+						currentUploads.properites, {
+							url: "/" + currentUploads.fileName,
+							md5Checksum: currentUploads.checksum
+						}
+					);
+
+					//if we had a previous package, we need to match the two
+					if (oldPackage) {
+						//handle any versioning stuff that needs to be done
+						mergePackageHistory(oldPackage, newPackage);
+					}
+
+					//we have our object, let's save that history
+					var packageDir = packageSaveLocation + "/" + currentUploads.user + "/" + currentUploads.name;
+
+					//write the latest information to file
+					//this is for long term storage -- and for loading up information for preparing the cache
+					var writeError = fs.outputJsonSync(packageDir + "/history", newPackage);
+
+					//ready to update the cache
+					cacheManager.updatePackageCache(currentUploads.user, currentUploads.name, newPackage)
+						.done(function()
+						{
+							//send back confirmation
+							success({
+								confirmed: true
+							});
+
+							//reject if necessary on error
+						}, reject);
+
+				}, reject);
+		} else
+			reject({
+				confirmed: false
+			});
+
+		return defer.promise;
+	}
+	
 
 	return self;
 }

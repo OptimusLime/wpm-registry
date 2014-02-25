@@ -21,7 +21,7 @@ module.exports = function(passport) {
 	var cacheManager = require(path.resolve(__dirname, "../../", "./" + storageJSON.cache.requireLocation))(app);
 	var cacheCompatibility = storageJSON.cache.compatiblity;
 
-	var storageManager = require(path.resolve(__dirname, "../../", "./" + storageJSON.storage.requireLocation))(app);
+	var storageManager = require(path.resolve(__dirname, "../../", "./" + storageJSON.storage.requireLocation))(cacheManager, app);
 	var storageCompatibility = storageJSON.storage.compatiblity;
 
 	//we now have a storage manager and cache manager
@@ -75,6 +75,27 @@ module.exports = function(passport) {
 
 		//send it all parameters parsed from the request
 		organizer.completePackageUpload(req, req.user, req.params)
+			.done(function(uploadParams)
+			{	
+				res.json(uploadParams);
+			}, 
+			function(err)
+			{
+				res.json({success: false, error: err});
+			});	
+	});
+
+
+	app.get(storageManager.expressConfirmRoute(), passport.authenticate('login', {
+		session : 'false',
+		//failureRedirect : '/signup', // redirect back to the signup page if there is an error
+		failureFlash : true // allow flash messages
+	}), function(req, res)
+	{
+		//we need to tell the organizer than a potential upload has been sent in
+
+		//send it all parameters parsed from the request
+		organizer.confirmPackageUpload(req, req.user, req.params)
 			.done(function()
 			{	
 				res.json({success: true});
@@ -84,6 +105,7 @@ module.exports = function(passport) {
 				res.json({success: false, error: err});
 			});	
 	});
+
 	// =============================================================================
 	// AUTHENTICATE (FIRST LOGIN) ==================================================
 	// =============================================================================
