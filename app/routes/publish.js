@@ -5,6 +5,8 @@ var qUtils = require('../utils/qUtils.js');
 var fs = require('fs-extra');
 var path = require('path');
 
+
+
 module.exports = function(passport) {
 
 	//we create an express app to handle publishing logic
@@ -21,8 +23,15 @@ module.exports = function(passport) {
 	var cacheManager = require(path.resolve(__dirname, "../../", "./" + storageJSON.cache.requireLocation))(app);
 	var cacheCompatibility = storageJSON.cache.compatiblity;
 
-	var storageManager = require(path.resolve(__dirname, "../../", "./" + storageJSON.storage.requireLocation))(cacheManager, app);
+	var storageManager = require(path.resolve(__dirname, "../../", "./" + storageJSON.storage.requireLocation))(app);
 	var storageCompatibility = storageJSON.storage.compatiblity;
+
+	storageManager.setCacheManager(cacheManager);
+	cacheManager.setStorageManager(storageManager);
+	
+	//set cache and storage for our organizer
+	organizer.setCacheAndStorage(cacheManager, storageManager);
+
 
 	//we now have a storage manager and cache manager
 	//we set up some routes

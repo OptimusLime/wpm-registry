@@ -12,6 +12,11 @@ function inMemoryCache()
 
 	var allPackages = {};
 
+	self.setStorageManager = function(storageManager)
+	{
+		self.storageManager = storageManager;
+	}
+
 	self.moduleCacheName = function(userName, packageName)
 	{
 		return userName + "/" + packageName;
@@ -24,22 +29,54 @@ function inMemoryCache()
 		var reject = function() { defer.reject.apply(defer, arguments); };
 		var success = function() { defer.resolve.apply(defer, arguments); };
 			
-		process.nextTick(function()
-		{
-			var cacheName = self.moduleCacheName(userName, packageName);
-			console.log('Checking for latest of: ', cacheName);
-			var cachedObject = allPackages[cacheName]; 
-			cachedObject = cachedObject || {};
+		self.getPackageCache(userName, packageName)
+			.then(function(cachedObject)
+			{
+				// console.log('Cached: ', cachedObject);
 
-			var latestVersion = cachedObject.version;
+				//two reasons: it doesn't exist, or it's a cold start
+				if(!cachedObject)
+				{
+					// console.log('Pull information from storage: ', userName, ":", packageName)
+					//let's try pulling from the storage manager (which has presumably has information stored)
+					self.storageManager.pullPackageInformation(userName, packageName)
+						.done(function(packageInfo)
+						{
+							// console.log('Package info returned: ', packageInfo);
 
-			//nothing less than 0!
-			latestVersion = latestVersion || "0.0.0";
-			
-			//send back the latest version of our object
-			success(latestVersion);
-		});
-	
+							//if it's not empty, we've got an object
+							//either way, we need to update the cache so that the next call will not return 
+							//an empty cache object -- just warming up the cache
+							self.updatePackageCache(userName, packageName, packageInfo)
+								.done(function(valid)
+									{
+										// console.log('Package cache updated, finished version call');
+										//package updated, return required inforation
+										if(valid.success)
+										{
+											//either we have a valid version, or we return the lowest possible version number
+											success(packageInfo.version || "0.0.0");
+										}
+										else
+											reject({error: "Failed to update package cache"});
+
+									}, 
+									reject);
+
+						}, reject)
+				}
+				else
+				{
+					var latestVersion = cachedObject.version;
+
+					//nothing less than 0!
+					latestVersion = latestVersion || "0.0.0";
+					
+					//send back the latest version of our object
+					success(latestVersion);
+				}
+			})
+		
 		return defer.promise;
 	}
 
@@ -77,7 +114,7 @@ function inMemoryCache()
 			//all in memory, so jsut check updated our cache object
 			allPackages[cacheName] = cacheObject;
 
-			console.log(allPackages);
+			// console.log(allPackages);
 
 			//done updating cache let it be known
 			success({success:true});

@@ -4,6 +4,7 @@ var semver = require('semver');
 var cuid = require('cuid');
 var fstream = require('fstream');
 var fs = require('fs-extra');
+var Error = require ("errno-codes");
 
 var qUtils = require("../qUtils.js");
 
@@ -12,13 +13,13 @@ module.exports = localStorage;
 //one hour is valid
 var validTime = 60*60000;
 
-function localStorage(cacheManager)
+function localStorage()
 {
 	var self = this;
 
 	//storage needs to know about the cache manager for storing/retrieving package info
 	//does't need to know the cache type, only certain functions
-	self.cacheManager = cacheManager;
+
 
 	self.inProgressUploads = {};
 
@@ -28,6 +29,10 @@ function localStorage(cacheManager)
 
 	var packageSaveLocation = path.resolve(__dirname, "../../../packages/");
 
+	self.setCacheManager = function(cacheManager)
+	{
+		self.cacheManager = cacheManager;
+	}
 
 	//where should we got to download a package
 	self.expressGetPackageRoute = function()
@@ -51,6 +56,10 @@ function localStorage(cacheManager)
 		return confirmRouteBase + '/:username/:uploadCUID';
 	}
 
+	self.moduleSaveDirectory = function(userName, packageName)
+	{
+		return packageSaveLocation + "/" + userName + "/" + packageName;
+	}
 
 	self.moduleFolder = function(user, packageInfo)
 	{
@@ -250,6 +259,46 @@ function localStorage(cacheManager)
 		return;
 	}
 
+	//Pull an individual packages history (useful for a cache miss)
+	self.pullPackageInformation = function(userName, packageName)
+	{
+		var defer = Q.defer();
+		var reject = function() { defer.reject.apply(defer, arguments); };
+		var success = function() { defer.resolve.apply(defer, arguments); };
+		
+		var packageDir = self.moduleSaveDirectory(userName, packageName);
+		var packageInfoFile = packageDir + "/history";
+
+		// console.log("Pullin package info: ", packageInfoFile);
+
+		//pull the history, read it as json
+		//packageInfo has everything we need, send it on it's way
+		qUtils.qReadJSON(packageInfoFile)
+			.done(function(packageInfo)
+			{
+				// console.log('JSON Read returned');
+				success(packageInfo);
+			}, 
+			function(err)
+			{
+				// console.log('Oops error reading history');
+
+				//otherwise, it's a miss (if the file doesn't exist)
+				if(err.errno == Error.ENOENT.errno)
+				{
+					//no file? then return empty package
+					success({});
+				}
+				else
+					reject(err);
+			})
+	
+		return defer.promise;
+	}
+
+
+
+
 	//confirm that the package was uploaded properly (useful for when the upload wasn't done to this server)
 	//will update the cache with the new version information
 	self.confirmPackageUpload = function(req, user, params)
@@ -283,7 +332,7 @@ function localStorage(cacheManager)
 
 			//lets create our cache object
 			//check previous object exists
-			cacheManager.getPackageCache(currentUploads.user, currentUploads.name)
+			self.cacheManager.getPackageCache(currentUploads.user, currentUploads.name)
 				.done(function(oldPackage) {
 
 					console.log("Confirmed upload: ",currentUploads);
@@ -292,7 +341,7 @@ function localStorage(cacheManager)
 						currentUploads.user,
 						currentUploads.name,
 						currentUploads.properites, {
-							url: "/" + currentUploads.fileName,
+							url: "/packages/" + currentUploads.fileName,
 							md5Checksum: currentUploads.checksum
 						}
 					);
@@ -304,14 +353,14 @@ function localStorage(cacheManager)
 					}
 
 					//we have our object, let's save that history
-					var packageDir = packageSaveLocation + "/" + currentUploads.user + "/" + currentUploads.name;
+					var packageDir = self.moduleSaveDirectory(currentUploads.user, currentUploads.name);//packageSaveLocation + "/" + currentUploads.user + "/" + currentUploads.name;
 
 					//write the latest information to file
 					//this is for long term storage -- and for loading up information for preparing the cache
 					var writeError = fs.outputJsonSync(packageDir + "/history", newPackage);
 
 					//ready to update the cache
-					cacheManager.updatePackageCache(currentUploads.user, currentUploads.name, newPackage)
+					self.cacheManager.updatePackageCache(currentUploads.user, currentUploads.name, newPackage)
 						.done(function()
 						{
 							//send back confirmation

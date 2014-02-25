@@ -10,8 +10,7 @@ var semver = require('semver');
 
 module.exports = organizer;
 
-var storageManager = require('./storage/local.js')();
-var cacheManager = require('./cache/inmemory.js')();
+var cacheManager, storageManager;
 
 var publishErrors = 
 {
@@ -30,6 +29,13 @@ var approveAuthority = function(user, postedUser)
 {
 	//the two must be equal
 	return user.username == postedUser.username;
+}
+
+
+organizer.setCacheAndStorage = function(cManager, sManager)
+{
+	cacheManager = cManager;
+	storageManager = sManager;
 }
 
 //method handles simply approving if a package can be uploaded (given the latest version vs desired new version)

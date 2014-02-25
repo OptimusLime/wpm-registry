@@ -16,6 +16,7 @@
     "fs-extra" : "*",   
     "semver" : "*",  
     "fstream" : "*",
+    "errno-codes" : "*",
     "cuid" : "*",  
     "q" : "*" 		
   }
