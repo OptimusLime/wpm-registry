@@ -120,7 +120,7 @@ function inMemoryCache()
 		
 		process.nextTick(function()
 		{
-			//we need to fetch from the cache using our information, then we update with new properites
+			//we need to fetch from the cache using our information, then we update with new properties
 			var cacheName = self.moduleCacheName(userName, packageName);
 			
 			//all in memory, so jsut check updated our cache object

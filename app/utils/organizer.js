@@ -212,3 +212,11 @@ organizer.sendModule = function(req, res)
 	//storage manager will handle sending the module back to the response
 	storageManager.sendModule(req, res);
 }
+
+//we take in request for module information, pipe out the json for the given history
+organizer.sendModuleInfo = function(req, res)
+{
+	//storage manager will handle sending the module back to the response
+	storageManager.sendModuleInfo(req, res);
+}
+

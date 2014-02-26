@@ -26,6 +26,7 @@ function localStorage()
 	var uploadRouteBase = "/upload";
 	var confirmRouteBase = "/confirm";
 	var packageBase = '/packages/:username/:moduleName';
+	var packageInfoBase = '/packageInfo/:username/:moduleName';
 
 	var packageSaveLocation = path.resolve(__dirname, "../../../packages/");
 
@@ -38,6 +39,11 @@ function localStorage()
 	self.expressGetPackageRoute = function()
 	{
 		return packageBase + "/:version";
+	}
+	
+	self.expressGetPackageInfoRoute = function()
+	{
+		return packageInfoBase + "/:version";
 	}
 
 	//approve is roughly the same place as get (just get vs post)
@@ -70,6 +76,11 @@ function localStorage()
 	{
 		//tarred file location
  		return self.moduleFolder(user, packageInfo) + "/" + semver.clean(packageInfo.version) + ".tar.gz";
+	}
+
+	self.moduleInfoPath = function(user, packageInfo)
+	{
+		return self.moduleFolder(user, packageInfo) + "/" + semver.clean(packageInfo.version);
 	}
 
 	self.prepareModuleUpload = function(user, packageInfo, checksum)
@@ -107,12 +118,23 @@ function localStorage()
 			user : user.username,
 			name: packageInfo.name, 
 			version: semver.clean(packageInfo.version),
-			properites : packageInfo,
+			properties : packageInfo,
 			checksum : checksum
 		};
+
+		// console.log("Write props to: ", self.moduleInfoPath(user, packageInfo));
+
+		var infoFullPath = path.resolve(packageSaveLocation, self.moduleInfoPath(user, packageInfo));
+		//write our package properties to file (overwrite anything there, it doesn't quite matter)
+		qUtils.qWriteJSON(infoFullPath, packageInfo)
+			.done(function()
+			{
+				//when we finish writing 
+				success(self.inProgressUploads[uploadCUID]);
+			}, reject);
+
 		// console.log("Perpare: ", self.inProgressUploads[uploadCUID]);
 
-		success(self.inProgressUploads[uploadCUID]);
 
 		return defer.promise;
 	}
@@ -240,7 +262,7 @@ function localStorage()
 		return {
 			name: packageName,
 			packageOwner : userName,
-			properites : packagePropertiesJSON,
+			properties : packagePropertiesJSON,
 			version : latestVersion,
 			location : 
 			{
@@ -253,9 +275,23 @@ function localStorage()
 
 	var mergePackageHistory = function(oldPackageInfo, newPackageInfo)
 	{
-		newPackageInfo.versions = oldPackageInfo.versions.slice();
-		newPackageInfo.versions.push(newPackageInfo.latest);
+		var allVersions = {};
+		if(oldPackageInfo.versions)
+		{
+			for(var i=0; i < oldPackageInfo.versions.length; i++)
+			{
+				allVersions[oldPackageInfo.versions[i]] = true;
+			}
+		}
 
+		allVersions[newPackageInfo.version] = true;
+
+		var distinctVersions = [];
+		for(var key in allVersions)
+			distinctVersions.push(key);
+
+		newPackageInfo.versions = distinctVersions;
+		
 		return;
 	}
 
@@ -340,7 +376,7 @@ function localStorage()
 					var newPackage = createPackage(
 						currentUploads.user,
 						currentUploads.name,
-						currentUploads.properites, {
+						currentUploads.properties, {
 							url: "/packages/" + currentUploads.fileName,
 							md5Checksum: currentUploads.checksum
 						}
@@ -455,10 +491,88 @@ function localStorage()
 
 		}
 
+	}
+
+	self.sendModuleInfo = function(req, res)
+	{
+		//storage manager will handle sending the module back to the response
+			
+		var moduleParams = req.params;
+
+		var userName = req.params.username;
+		var moduleName = req.params.moduleName;
+		var version = req.params.version;
+
+		var streamToResponse = function()
+		{
+			var moduleInfoLocation = self.moduleSaveDirectory(userName, moduleName) + "/" + semver(version);
+			console.log('PInfo: Streaming: ', moduleInfoLocation);
+
+			var reader = fstream.Reader(
+			{
+				path : moduleInfoLocation
+			});
+
+			reader.on("error", function(err)
+			{
+				res.status(err.status || 500);
+				return;
+			})
+
+			reader.on("end", function()
+			{
+				//we're done as well, if we need to do a callback, it goes here
+			})
+
+			//pipe the file into our response stream
+			reader.pipe(res);
+		}
+
+		//if the version is not supplied or == "*", we must pull the latest 
+		if(!version || version == "*")
+		{
+			console.log('PInfo: Checking cache: ', userName, moduleName, version);
+
+			self.cacheManager.getPackageCache(userName, moduleName)
+				.then(function(cachedObject)
+				{
+					console.log('PInfo: Cache response: ', cachedObject);
+
+					//if the cached object doesn't exist -- then this package doesn't exist
+					if (Object.getOwnPropertyNames(cachedObject).length == 0)
+					{
+						reject({failed: true, error: "Package doesn't exist."});
+						return;
+					}
+
+					//now we have the latest information
+					version = cachedObject.version;
+
+					streamToResponse();
+
+				}, function(err)
+				{
+					console.log("Package cache error: ",err);
+					res.status(err.status || 500);
+					return;
+				});
+		}
+		else
+		{
+			//we have the version (and it's a valid version number)
+			//let's pull it according to our system
+
+			streamToResponse();
+
+		}
+
 
 
 
 	}
+	
+
+
 	
 
 	return self;

@@ -45,6 +45,27 @@ qGlobal.qReadJSON = function(file)
 }
 
 
+qGlobal.qWriteJSON = function(file, jObject)
+{
+	// if(!file){
+	// 	var err = new Error("No arguments provided");
+	// 	err.name = "QNoArguments";
+	// 	reject(err);
+	// }
+
+	var defer = Q.defer();
+	var reject = function() { defer.reject.apply(this, arguments); };
+	var success = function() { defer.resolve.apply(this, arguments); };
+	
+	fs.outputJSON(file, jObject, function(err)
+	{
+		if(err) reject(err);
+		else success();
+	});
+
+	return defer.promise;
+}
+
 qGlobal.qExists = function(pathLocation)
 {
 	var defer = Q.defer();

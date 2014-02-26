@@ -124,6 +124,15 @@ module.exports = function(passport) {
 		organizer.sendModule(req, res);
 	});
 
+	app.get(storageManager.expressGetPackageInfoRoute(), function(req, res)
+	{
+		//we need to tell the organizer than a potential upload has been sent in
+
+		//send it all parameters parsed from the request
+		organizer.sendModuleInfo(req, res);
+	});
+
+
 
 	// =============================================================================
 	// AUTHENTICATE (FIRST LOGIN) ==================================================
