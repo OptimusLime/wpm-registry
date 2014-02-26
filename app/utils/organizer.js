@@ -191,7 +191,9 @@ organizer.confirmPackageUpload = function(req, user, params)
 			
 			//a success! all uploaded :)
 			if(uploadCompleted.confirmed)
+			{
 				success({success:true});
+			}
 			//didn't succeed in upload, but didn't  get rejected, woops
 			else
 				reject(publishErrors.UnknownConfirmError);
@@ -203,3 +205,10 @@ organizer.confirmPackageUpload = function(req, user, params)
 	return defer.promise;
 }
 
+
+//We take in request object, then pipe out to the response
+organizer.sendModule = function(req, res)
+{
+	//storage manager will handle sending the module back to the response
+	storageManager.sendModule(req, res);
+}

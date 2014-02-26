@@ -37,7 +37,7 @@ function localStorage()
 	//where should we got to download a package
 	self.expressGetPackageRoute = function()
 	{
-		return packageBase + "/:fileName";
+		return packageBase + "/:version";
 	}
 
 	//approve is roughly the same place as get (just get vs post)
@@ -378,6 +378,86 @@ function localStorage()
 			});
 
 		return defer.promise;
+	}
+
+
+	self.sendModule = function(req, res)
+	{
+		//storage manager will handle sending the module back to the response
+			
+		var moduleParams = req.params;
+
+		var userName = req.params.username;
+		var moduleName = req.params.moduleName;
+		var version = req.params.version;
+
+		var streamToResponse = function()
+		{
+			var moduleLocation = self.moduleSaveDirectory(userName, moduleName) + "/" + semver(version) +  ".tar.gz";
+			console.log('Streaming: ', moduleLocation);
+
+			var reader = fstream.Reader(
+			{
+				path : moduleLocation
+			});
+
+			reader.on("error", function(err)
+			{
+				res.status(err.status || 500);
+				return;
+			})
+
+			reader.on("end", function()
+			{
+				//we're done as well, if we need to do a callback, it goes here
+			})
+
+			//pipe the file into our response stream
+			reader.pipe(res);
+		}
+
+		//if the version is not supplied or == "*", we must pull the latest 
+
+		if(!version || version == "*")
+		{
+			console.log('Checking cache: ', userName, moduleName, version);
+
+			self.cacheManager.getPackageCache(userName, moduleName)
+				.then(function(cachedObject)
+				{
+					console.log('Cache response: ', cachedObject);
+
+					//if the cached object doesn't exist -- then this package doesn't exist
+					if (Object.getOwnPropertyNames(cachedObject).length == 0)
+					{
+						reject({failed: true, error: "Package doesn't exist."});
+						return;
+					}
+
+					//now we have the latest information
+					version = cachedObject.version;
+
+					
+					streamToResponse();
+				}, function(err)
+				{
+					console.log("Package cache error: ",err);
+					res.status(err.status || 500);
+					return;
+				});
+		}
+		else
+		{
+			//we have the version (and it's a valid version number)
+			//let's pull it according to our system
+
+			streamToResponse();
+
+		}
+
+
+
+
 	}
 	
 

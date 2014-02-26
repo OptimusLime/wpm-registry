@@ -115,6 +115,16 @@ module.exports = function(passport) {
 			});	
 	});
 
+	//doesn't need to be authenticated (for this storage type -- might need to update in the future)
+	app.get(storageManager.expressGetPackageRoute(), function(req, res)
+	{
+		//we need to tell the organizer than a potential upload has been sent in
+
+		//send it all parameters parsed from the request
+		organizer.sendModule(req, res);
+	});
+
+
 	// =============================================================================
 	// AUTHENTICATE (FIRST LOGIN) ==================================================
 	// =============================================================================

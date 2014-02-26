@@ -37,36 +37,13 @@ function inMemoryCache()
 				//two reasons: it doesn't exist, or it's a cold start
 				if(!cachedObject)
 				{
-					// console.log('Pull information from storage: ', userName, ":", packageName)
-					//let's try pulling from the storage manager (which has presumably has information stored)
-					self.storageManager.pullPackageInformation(userName, packageName)
-						.done(function(packageInfo)
-						{
-							// console.log('Package info returned: ', packageInfo);
-
-							//if it's not empty, we've got an object
-							//either way, we need to update the cache so that the next call will not return 
-							//an empty cache object -- just warming up the cache
-							self.updatePackageCache(userName, packageName, packageInfo)
-								.done(function(valid)
-									{
-										// console.log('Package cache updated, finished version call');
-										//package updated, return required inforation
-										if(valid.success)
-										{
-											//either we have a valid version, or we return the lowest possible version number
-											success(packageInfo.version || "0.0.0");
-										}
-										else
-											reject({error: "Failed to update package cache"});
-
-									}, 
-									reject);
-
-						}, reject)
+					//we dont' have a cached object (and we attempted to load from storage)
+					//therefore, this doesn't exists
+					reject({success:false, error: "No cache object returned, must have been a storage loading error."});
 				}
 				else
 				{
+					//the cached object might be empty, we still return a reasonable version (undefined will cause issues)
 					var latestVersion = cachedObject.version;
 
 					//nothing less than 0!
@@ -86,14 +63,49 @@ function inMemoryCache()
 		var reject = function() { defer.reject.apply(defer, arguments); };
 		var success = function() { defer.resolve.apply(defer, arguments); };
 			
-		process.nextTick(function()
+		//what did we save it under .. i furgitttt
+		var cacheName = self.moduleCacheName(userName, packageName);
+		
+		var cachedObject = allPackages[cacheName];
+
+		if(!cachedObject)
 		{
-			//what did we save it under .. i furgitttt
-			var cacheName = self.moduleCacheName(userName, packageName);
-			
-			//send back the latest version of our object
-			success(allPackages[cacheName]);
-		});
+			// console.log('Pull information from storage: ', userName, ":", packageName)
+
+			//let's try pulling from the storage manager (which has presumably has information stored)
+			self.storageManager.pullPackageInformation(userName, packageName)
+				.done(function(packageInfo)
+				{
+					// console.log('Package info returned: ', packageInfo);
+
+					//if it's not empty, we've got an object
+					//either way, we need to update the cache so that the next call will not return 
+					//an empty cache object -- just warming up the cache
+					self.updatePackageCache(userName, packageName, packageInfo)
+						.done(function(valid)
+							{
+								// console.log('Package cache updated, finished version call');
+								//package updated, return required inforation
+								if(valid.success)
+								{
+									//either we have a valid package -- or this is empty
+									success(packageInfo);
+								}
+								else
+									reject({error: "Failed to update package cache while warming up cache"});
+
+							}, 
+							reject);
+
+				}, reject)
+		}
+		else
+		{
+			success(cachedObject);
+		}
+
+		//send back the latest version of our object
+		//success(allPackages[cacheName]);
 	
 		return defer.promise;
 	}
