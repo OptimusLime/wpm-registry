@@ -107,6 +107,9 @@ organizer.prepareModuleUpload = function(currentUser, packageInfo, checksum)
 	var reject = function() { defer.reject.apply(defer, arguments); };
 	var success = function() { defer.resolve.apply(defer, arguments); };
 	
+	//add user to packageInfo
+	packageInfo.packageOwner = currentUser.username;
+
 	//now we need to advise the client on where to send the package information
 	storageManager.prepareModuleUpload(currentUser, packageInfo, checksum)
 		.done(function(uploadParams)
