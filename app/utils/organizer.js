@@ -21,6 +21,7 @@ var publishErrors =
 	UnapprovedUpload : {errno: 6000,code: 6000, message: "Error with the desired upload. Rejected for being unapproved."},
 	UnknownUpload : {errno: 7000,code: 7000, message: "Unknown upload error."},
 	UnknownConfirmError : {errno: 8000,code: 8000, message: "Unknown confirm error."},
+	CircularReference : {errno: 9000,code: 9000, message: "Module references itself in dependencies."},
 
 
 };
@@ -30,7 +31,6 @@ var approveAuthority = function(user, postedUser)
 	//the two must be equal
 	return user.username == postedUser.username;
 }
-
 
 organizer.setCacheAndStorage = function(cManager, sManager)
 {
