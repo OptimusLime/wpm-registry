@@ -4,7 +4,7 @@ var semver = require('semver');
 var cuid = require('cuid');
 var fstream = require('fstream');
 var fs = require('fs-extra');
-var Error = require ("errno-codes");
+var nodeError = require ("errno-codes");
 
 var qUtils = require("../qUtils.js");
 
@@ -320,7 +320,7 @@ function localStorage()
 				// console.log('Oops error reading history');
 
 				//otherwise, it's a miss (if the file doesn't exist)
-				if(err.errno == Error.ENOENT.errno)
+				if(err.errno == nodeError.ENOENT.errno)
 				{
 					//no file? then return empty package
 					success({});
@@ -466,19 +466,21 @@ function localStorage()
 					//if the cached object doesn't exist -- then this package doesn't exist
 					if (Object.getOwnPropertyNames(cachedObject).length == 0)
 					{
-						reject({failed: true, error: "Package doesn't exist."});
+						throw new Error("Package doesn't exist.");
 						return;
 					}
 
+
 					//now we have the latest information
 					version = cachedObject.version;
-
 					
 					streamToResponse();
-				}, function(err)
+				})
+				.fail(function(err)
 				{
 					console.log("Package cache error: ",err);
 					res.status(err.status || 500);
+					res.end();
 					return;
 				});
 		}
@@ -541,7 +543,7 @@ function localStorage()
 					//if the cached object doesn't exist -- then this package doesn't exist
 					if (Object.getOwnPropertyNames(cachedObject).length == 0)
 					{
-						reject({failed: true, error: "Package doesn't exist."});
+						throw new Error("Package doesn't exist.");
 						return;
 					}
 
@@ -550,10 +552,12 @@ function localStorage()
 
 					streamToResponse();
 
-				}, function(err)
+				})
+				.fail(function(err)
 				{
-					console.log("Package cache error: ",err);
+					console.log("Package info cache error: ",err);
 					res.status(err.status || 500);
+					res.end();
 					return;
 				});
 		}
